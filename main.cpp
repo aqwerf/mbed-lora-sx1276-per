@@ -114,8 +114,8 @@ static uint16_t GetDigit(char *p)
 
 static void SendTRPReq()
 {
-	debug_if(DEBUG_MESSAGE, "TRP_REQ %c%c%c%c %04d\n\r",
-		 SID[0], SID[1], SID[2], SID[3], EndCount);
+	debug("TRP_REQ %c%c%c%c %04d\r\n",
+	      SID[0], SID[1], SID[2], SID[3], EndCount);
 	Buffer[0] = 'a';
 	memcpy(&Buffer[1], SID, sizeof(SID));
 	sprintf(&Buffer[1]+sizeof(SID), "%04d", EndCount);
@@ -123,7 +123,7 @@ static void SendTRPReq()
 }
 static void SendTRPResp()
 {
-	debug_if(DEBUG_MESSAGE, "TRP_RESP %c%c%c%c %04d %04d\n\r",
+	debug_if(DEBUG_MESSAGE, "TRP_RESP %c%c%c%c %04d %04d\r\n",
 		 SID[0], SID[1], SID[2], SID[3], 
 		 CurCount+1, EndCount);
 	Buffer[0] = 'b';
@@ -134,7 +134,7 @@ static void SendTRPResp()
 
 static void SendTISReq()
 {
-	debug_if(DEBUG_MESSAGE, "TIS_REQ %c%c%c%c %04d %04d\n\r",
+	debug_if(DEBUG_MESSAGE, "TIS_REQ %c%c%c%c %04d %04d\r\n",
 		 SID[0], SID[1], SID[2], SID[3], 
 		 CurCount+1, EndCount);
 	Buffer[0] = 'c';
@@ -145,8 +145,10 @@ static void SendTISReq()
 
 static void SendTISResp()
 {
-	debug_if(DEBUG_MESSAGE, "TIS_RESP %c%c%c%c %04d\n\r",
-		 SID[0], SID[1], SID[2], SID[3], CurCount);
+	debug("TIS_RESP %c%c%c%c %04d\r\n",
+	      SID[0], SID[1], SID[2], SID[3], CurCount);
+	debug("Avg RSSI:%d, SNR:%d\r\n",
+	      AccRssi / CurCount, AccSnr / CurCount);
 	Buffer[0] = 'd';
 	memcpy(&Buffer[1], SID, sizeof(SID));
 	sprintf(&Buffer[1]+sizeof(SID), "%04d", CurCount);
@@ -184,11 +186,13 @@ static void StartTIS(int count)
 static void ReportTRP()
 {
 	debug("TRP Result: %d/%d\r\n", CurCount, EndCount);
+	debug("Avg RSSI: %d, SNR: %d\r\n",
+	      AccRssi / CurCount, AccSnr / CurCount);
 }
 
 static void fire()
 {
-	printf("Firing \r\n");
+	printf("Firing\r\n");
 //	StartTRP(100);
 	StartTIS(100);
 }
@@ -206,6 +210,8 @@ static void RxProc()
 		EndCount = GetDigit(&Buffer[1 + sizeof(SID)]);
 		AccRssi = RssiValue;
 		AccSnr = SnrValue;
+		debug("TRP Req: %d (RSSI:%d, SNR:%d)\r\n",
+		      EndCount, RssiValue, SnrValue);
 		SendTRPResp();
 		break;
 	case 'b':		// from slave
@@ -242,7 +248,7 @@ static void RxProc()
 	case 'd':		// from slave
 		if (Mode == TIS_REQ) {
 			CurCount = GetDigit(&Buffer[1 + sizeof(SID)]);
-			debug("TIS Result: %d, %d\n\r", CurCount, EndCount);
+			debug("TIS Result: %d, %d (RSSI:%d, SNR:%d)\r\n", CurCount, EndCount, RssiValue, SnrValue);
 			Mode = NO_ACT;
 			break;
 		}
@@ -288,7 +294,7 @@ static void TxProc()
 
 int main() 
 {
-	debug("\n\n\r     SX1276 PER Test Application \n\n\r");
+	debug("\r\nSX1276 PER Test Application\r\n");
 	button.rise(&fire);
 
 	// Initialize Radio driver
@@ -301,20 +307,20 @@ int main()
     
 	// verify the connection with the board
 	while (Radio.Read( REG_VERSION ) == 0x00) {
-		debug("Radio could not be detected!\n\r", NULL);
+		debug("Radio could not be detected!\r\n", NULL);
 		wait(1);
 	}
             
 	debug_if((DEBUG_MESSAGE & (Radio.DetectBoardType() == SX1276MB1LAS)) , 
-		 "\n\r > Board Type: SX1276MB1LAS < \n\r" );
+		 "\r\n> Board Type: SX1276MB1LAS <\r\n" );
 	debug_if((DEBUG_MESSAGE & (Radio.DetectBoardType() == SX1276MB1MAS)) , 
-		 "\n\r > Board Type: SX1276MB1MAS < \n\r" );
+		 "\r\n> Board Type: SX1276MB1MAS <\r\n" );
 	
 	Radio.SetChannel(RF_FREQUENCY);
 
 #if USE_MODEM_LORA == 1
-	debug_if(LORA_FHSS_ENABLED, "\n\n\r             > LORA FHSS Mode < \n\n\r");
-	debug_if(!LORA_FHSS_ENABLED, "\n\n\r             > LORA Mode < \n\n\r");
+	debug_if(LORA_FHSS_ENABLED, "\r\n> LORA FHSS Mode <\r\n");
+	debug_if(!LORA_FHSS_ENABLED, "\r\n> LORA Mode <\r\n");
 	
 	Radio.SetTxConfig(MODEM_LORA, TX_OUTPUT_POWER, 0, LORA_BANDWIDTH,
 			  LORA_SPREADING_FACTOR, LORA_CODINGRATE,
@@ -328,7 +334,7 @@ int main()
 			  LORA_CRC_ENABLED, LORA_FHSS_ENABLED, LORA_NB_SYMB_HOP, 
 			  LORA_IQ_INVERSION_ON, true);
 #elif USE_MODEM_FSK == 1
-	debug("\n\n\r              > FSK Mode < \n\n\r");
+	debug("\r\n> FSK Mode <\r\n");
 	Radio.SetTxConfig(MODEM_FSK, TX_OUTPUT_POWER, FSK_FDEV, 0,
 			  FSK_DATARATE, 0,
 			  FSK_PREAMBLE_LENGTH, FSK_FIX_LENGTH_PAYLOAD_ON,
@@ -382,7 +388,7 @@ void OnTxDone(void)
 {
 	Radio.Sleep();
 	State = TX;
-	debug_if(DEBUG_MESSAGE, "> OnTxDone\n\r");
+	debug_if(DEBUG_MESSAGE, "> OnTxDone\r\n");
 }
 
 void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr)
@@ -393,14 +399,14 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr)
 	RssiValue = rssi;
 	SnrValue = snr;
 	State = RX;
-	debug_if(DEBUG_MESSAGE, "> OnRxDone\n\r");
+	debug_if(DEBUG_MESSAGE, "> OnRxDone\r\n");
 }
 
 void OnTxTimeout(void)
 {
 	Radio.Sleep();
 	State = TX_TIMEOUT;
-	debug_if(DEBUG_MESSAGE, "> OnTxTimeout\n\r");
+	debug_if(DEBUG_MESSAGE, "> OnTxTimeout\r\n");
 }
 
 void OnRxTimeout(void)
@@ -408,12 +414,12 @@ void OnRxTimeout(void)
 	Radio.Sleep();
 	Buffer[BufferSize] = 0;
 	State = RX_TIMEOUT;
-	debug_if(DEBUG_MESSAGE, "> OnRxTimeout\n\r");
+	debug_if(DEBUG_MESSAGE, "> OnRxTimeout\r\n");
 }
 
 void OnRxError(void)
 {
 	Radio.Sleep();
 	State = RX_ERROR;
-	debug_if(DEBUG_MESSAGE, "> OnRxError\n\r");
+	debug_if(DEBUG_MESSAGE, "> OnRxError\r\n");
 }
