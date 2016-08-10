@@ -92,6 +92,8 @@ char Buffer[BUFFER_SIZE];
 
 int16_t RssiValue = 0.0;
 int8_t SnrValue = 0.0;
+int32_t AccRssi;
+int32_t AccSnr;
 
 // Process State
 AppMode_t Mode = NO_ACT;
@@ -163,6 +165,8 @@ static void StartTRP(int count)
 	CurCount = 0;
 	EndCount = count;
 	Mode = TRP_REQ;
+	AccRssi = 0;
+	AccSnr = 0;
 	SendTRPReq();
 }
 
@@ -172,6 +176,8 @@ static void StartTIS(int count)
 	CurCount = 0;
 	EndCount = count;
 	Mode = TIS_REQ;
+	AccRssi = 0;
+	AccSnr = 0;
 	SendTISReq();
 }
 
@@ -198,11 +204,15 @@ static void RxProc()
 		memcpy(SID, &Buffer[1], sizeof(SID));
 		CurCount = 0;
 		EndCount = GetDigit(&Buffer[1 + sizeof(SID)]);
+		AccRssi = RssiValue;
+		AccSnr = SnrValue;
 		SendTRPResp();
 		break;
 	case 'b':		// from slave
 		if (Mode == TRP_REQ) {
 			CurCount++;
+			AccRssi += RssiValue;
+			AccSnr += SnrValue;
 			if (memcmp(&Buffer[1 + sizeof(SID)],
 				   &Buffer[1 + sizeof(SID) + 4], 4) == 0) {
 				// finished
@@ -220,8 +230,12 @@ static void RxProc()
 			memcpy(SID, &Buffer[1], sizeof(SID));
 			CurCount = 0;
 			Mode = TIS_RESP;
+			AccRssi = 0;
+			AccSnr = 0;
 		}
 		CurCount++;
+		AccRssi += RssiValue;
+		AccSnr += SnrValue;
 		EndCount = GetDigit(&Buffer[1 + sizeof(SID)] + 4);
 		Radio.Rx(RX_TIS_TIMEOUT);
 		break;
