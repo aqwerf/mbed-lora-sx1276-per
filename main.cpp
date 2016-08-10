@@ -123,7 +123,7 @@ static void SendTRPReq()
 }
 static void SendTRPResp()
 {
-	debug_if(DEBUG_MESSAGE, "TRP_RESP %c%c%c%c %04d %04d\r\n",
+	debug_if(DEBUG_MESSAGE || CurCount == 0, "TRP_RESP %c%c%c%c %04d %04d\r\n",
 		 SID[0], SID[1], SID[2], SID[3], 
 		 CurCount+1, EndCount);
 	Buffer[0] = 'b';
@@ -134,7 +134,7 @@ static void SendTRPResp()
 
 static void SendTISReq()
 {
-	debug_if(DEBUG_MESSAGE, "TIS_REQ %c%c%c%c %04d %04d\r\n",
+	debug_if(DEBUG_MESSAGE || CurCount == 0, "TIS_REQ %c%c%c%c %04d %04d\r\n",
 		 SID[0], SID[1], SID[2], SID[3], 
 		 CurCount+1, EndCount);
 	Buffer[0] = 'c';
