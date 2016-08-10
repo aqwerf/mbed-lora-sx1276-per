@@ -144,7 +144,7 @@ static void SendTISReq()
 static void SendTISResp()
 {
 	debug_if(DEBUG_MESSAGE, "TIS_RESP %c%c%c%c %04d\n\r",
-		 SID[0], SID[1], SID[2], SID[3], EndCount);
+		 SID[0], SID[1], SID[2], SID[3], CurCount);
 	Buffer[0] = 'd';
 	memcpy(&Buffer[1], SID, sizeof(SID));
 	sprintf(&Buffer[1]+sizeof(SID), "%04d", CurCount);
@@ -227,7 +227,7 @@ static void RxProc()
 		break;
 	case 'd':		// from slave
 		if (Mode == TIS_REQ) {
-			CurCount = GetDigit(&Buffer[1 + sizeof(SID)] + 4);
+			CurCount = GetDigit(&Buffer[1 + sizeof(SID)]);
 			debug("TIS Result: %d, %d\n\r", CurCount, EndCount);
 			Mode = NO_ACT;
 			break;
