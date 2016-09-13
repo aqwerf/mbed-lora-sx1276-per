@@ -10,7 +10,7 @@
 #define USE_MODEM_LORA			1
 #define USE_MODEM_FSK			!USE_MODEM_LORA
 
-#define RF_FREQUENCY			868000000 // Hz
+#define RF_FREQUENCY			920000000 // Hz
 #define TX_OUTPUT_POWER			14        // 14 dBm
 
 #if USE_MODEM_LORA == 1
