@@ -97,68 +97,65 @@ int32_t AccSnr;
 
 // Process State
 AppMode_t Mode = NO_ACT;
-char SID[5];
+int SID = '0';
 uint16_t CurCount;
 uint16_t EndCount;
 
+uint32_t RxTimeout;
 
 static uint16_t GetDigit(char *p)
 {
 	uint8_t i;
 	uint16_t v = 0;
 
-	for (i = 0; i < 4; i++)
+	for (i = 0; i < 3; i++)
 		v = v * 10 + p[i] - '0';
 	return v;
 }
 
 static void SendTRPReq()
 {
-	debug("TRP_REQ %c%c%c%c %04d\r\n",
-	      SID[0], SID[1], SID[2], SID[3], EndCount);
+	debug("TRP_REQ %d %03d\r\n", SID, EndCount);
 	Buffer[0] = 'a';
-	memcpy(&Buffer[1], SID, sizeof(SID));
-	sprintf(&Buffer[1]+sizeof(SID), "%04d", EndCount);
-	Radio.Send((uint8_t*)Buffer, 1 + sizeof(SID) + 4);
+	Buffer[1] = SID;
+	sprintf(&Buffer[2], "%03d", EndCount);
+	Radio.Send((uint8_t*)Buffer, 2 + 3);
 }
 static void SendTRPResp()
 {
-	debug_if(DEBUG_MESSAGE || CurCount == 0, "TRP_RESP %c%c%c%c %04d %04d\r\n",
-		 SID[0], SID[1], SID[2], SID[3], 
-		 CurCount+1, EndCount);
+	debug_if(DEBUG_MESSAGE || CurCount+1 == EndCount, "TRP_RESP %d %03d (%03d)\r\n",
+		 SID, CurCount, EndCount);
 	Buffer[0] = 'b';
-	memcpy(&Buffer[1], SID, sizeof(SID));
-	sprintf(&Buffer[1 + sizeof(SID)], "%04d%04d", ++CurCount, EndCount);
-	Radio.Send((uint8_t*)Buffer, 1 + sizeof(SID) + 8);
+	Buffer[1] = SID;
+	sprintf(&Buffer[2], "%03d", CurCount++);
+	Radio.Send((uint8_t*)Buffer, 2 + 3);
 }
 
 static void SendTISReq()
 {
-	debug_if(DEBUG_MESSAGE || CurCount == 0, "TIS_REQ %c%c%c%c %04d %04d\r\n",
-		 SID[0], SID[1], SID[2], SID[3], 
-		 CurCount+1, EndCount);
+	debug_if(DEBUG_MESSAGE || CurCount == 0, "TIS_REQ %d %03d %03d\r\n",
+		 SID, CurCount+1, EndCount);
 	Buffer[0] = 'c';
-	memcpy(&Buffer[1], SID, sizeof(SID));
-	sprintf(&Buffer[1]+sizeof(SID), "%04d%04d", ++CurCount, EndCount);
-	Radio.Send((uint8_t*)Buffer, 1 + sizeof(SID) + 8);
+	Buffer[1] = SID;
+	sprintf(&Buffer[2], "%03d%03d", CurCount++, EndCount);
+	Radio.Send((uint8_t*)Buffer, 2 + 6);
 }
 
 static void SendTISResp()
 {
-	debug("TIS_RESP %c%c%c%c %04d\r\n",
-	      SID[0], SID[1], SID[2], SID[3], CurCount);
+	debug("TIS_RESP %d %03d\r\n", SID, CurCount);
 	debug("Avg RSSI:%d, SNR:%d\r\n",
 	      AccRssi / CurCount, AccSnr / CurCount);
 	Buffer[0] = 'd';
-	memcpy(&Buffer[1], SID, sizeof(SID));
-	sprintf(&Buffer[1]+sizeof(SID), "%04d", CurCount);
-	Radio.Send((uint8_t*)Buffer, 1 + sizeof(SID) + 4);
+	Buffer[1] = SID;
+	sprintf(&Buffer[2], "%03d", CurCount);
+	Radio.Send((uint8_t*)Buffer, 2 + 3);
 }
 
 static void GenSID()
 {
-	int v = rand() % 10000;
-	sprintf(SID, "%04d0", v);
+	if (++SID > '9')
+		SID = '1';
 }
   
 static void StartTRP(int count)
@@ -194,7 +191,7 @@ static void fire()
 {
 	printf("Firing\r\n");
 //	StartTRP(100);
-	StartTIS(100);
+	StartTIS(500);
 }
 
 static void RxProc()
@@ -205,9 +202,9 @@ static void RxProc()
 	switch (Buffer[0]) {
 	case 'a':		// from master
 		Mode = TRP_RESP;
-		memcpy(SID, &Buffer[1], sizeof(SID));
+		SID = Buffer[1];
 		CurCount = 0;
-		EndCount = GetDigit(&Buffer[1 + sizeof(SID)]);
+		EndCount = GetDigit(&Buffer[2]);
 		AccRssi = RssiValue;
 		AccSnr = SnrValue;
 		debug("TRP Req: %d (RSSI:%d, SNR:%d)\r\n",
@@ -219,21 +216,23 @@ static void RxProc()
 			CurCount++;
 			AccRssi += RssiValue;
 			AccSnr += SnrValue;
-			if (memcmp(&Buffer[1 + sizeof(SID)],
-				   &Buffer[1 + sizeof(SID) + 4], 4) == 0) {
+			if (memcmp(&Buffer[2],
+				   &Buffer[2 + 3], 3) == 0) {
 				// finished
 				ReportTRP();
 				Mode = NO_ACT;
-				Radio.Rx(0);
+				RxTimeout = 0;
 				break;
 			}
 				
+		} else {
+			RxTimeout = RX_TRP_TIMEOUT;
 		}
-		Radio.Rx(RX_TRP_TIMEOUT);
+		Radio.Rx(RxTimeout);
 		break;
 	case 'c':		// from master
-		if (Mode != TIS_RESP || memcmp(SID, &Buffer[1], sizeof(SID))) {
-			memcpy(SID, &Buffer[1], sizeof(SID));
+		if (Mode != TIS_RESP || SID != Buffer[1]) {
+			SID = Buffer[1];
 			CurCount = 0;
 			Mode = TIS_RESP;
 			AccRssi = 0;
@@ -242,17 +241,21 @@ static void RxProc()
 		CurCount++;
 		AccRssi += RssiValue;
 		AccSnr += SnrValue;
-		EndCount = GetDigit(&Buffer[1 + sizeof(SID)] + 4);
-		Radio.Rx(RX_TIS_TIMEOUT);
+		EndCount = GetDigit(&Buffer[2] + 3);
+		debug("TIS Req: %d (RSSI:%d, SNR:%d)\r\n", EndCount, RssiValue, SnrValue);
+		RxTimeout = RX_TRP_TIMEOUT;
+		Radio.Rx(RxTimeout);
 		break;
 	case 'd':		// from slave
 		if (Mode == TIS_REQ) {
-			CurCount = GetDigit(&Buffer[1 + sizeof(SID)]);
+			CurCount = GetDigit(&Buffer[2]);
 			debug("TIS Result: %d, %d (RSSI:%d, SNR:%d)\r\n", CurCount, EndCount, RssiValue, SnrValue);
 			Mode = NO_ACT;
+			StartTIS(100);
 			break;
 		}
-		Radio.Rx(0);
+		RxTimeout = 0;
+		Radio.Rx(RxTimeout);
 		break;
 	}
 	State = IDLE;
@@ -262,13 +265,15 @@ static void TxProc()
 {
 	switch (Mode) {
 	case TRP_REQ:
-		Radio.Rx(RX_TRP_TIMEOUT);
+		RxTimeout = RX_TRP_TIMEOUT;
+		Radio.Rx(RxTimeout);
 		break;
 	case TRP_RESP:
 		if (CurCount >= EndCount) {
 			// finished
 			Mode = NO_ACT;
-			Radio.Rx(0);
+			RxTimeout = 0;
+			Radio.Rx(RxTimeout);
 		} else {
 			SendTRPResp();
 		}
@@ -276,17 +281,19 @@ static void TxProc()
 	case TIS_REQ:
 		if (CurCount >= EndCount) {
 			// finished
-			Radio.Rx(RX_TIS_TIMEOUT);
+			RxTimeout = RX_TIS_TIMEOUT;
+			Radio.Rx(RxTimeout);
 		} else {
 			SendTISReq();
 		}
 		break;
 	case TIS_RESP:
 		Mode = NO_ACT;
-		Radio.Rx(0);
+		RxTimeout = 0;
+		Radio.Rx(RxTimeout);
 		break;
 	default:
-		Radio.Rx(0);
+		Radio.Rx(RxTimeout);
 		break;
 	}
 	State = IDLE;
@@ -368,16 +375,16 @@ int main()
 			if (Mode == TRP_REQ) {
 				ReportTRP();
 				Mode = NO_ACT;
-				Radio.Rx(0);
+				RxTimeout = 0;
+				Radio.Rx(RxTimeout);
 			} else if (Mode == TIS_RESP) {
 				SendTISResp();
 				State = IDLE;
 				break;
 			}
-			// same as default
 		case RX_ERROR:
 		default:
-			Radio.Rx(0);
+			Radio.Rx(RxTimeout);
 			State = IDLE;
 			break;
 		}
