@@ -370,20 +370,22 @@ int main()
 	Radio.Rx(0);
 
 	while (1) {
-		switch (State) {
+		__disable_irq();
+		AppStates_t s = State;
+		State = IDLE;
+		__enable_irq();
+		switch (s) {
+		default:
 		case IDLE:
 			break;
 		case TX:
 		case TX_TIMEOUT:
-			State = IDLE;
 			TxProc();
 			break;
 		case RX:
-			State = IDLE;
 			RxProc();
 			break;
 		case RX_TIMEOUT: // only TIS_RESP
-			State = IDLE;
 			if (Mode == TRP_REQ) {
 				ReportTRP();
 				Mode = NO_ACT;
@@ -395,8 +397,6 @@ int main()
 			Radio.Rx(RxTimeout);
 			break;
 		case RX_ERROR:
-		default:
-			State = IDLE;
 			Radio.Rx(RxTimeout);
 			break;
 		}
