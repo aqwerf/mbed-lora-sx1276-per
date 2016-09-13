@@ -102,6 +102,7 @@ uint16_t CurCount;
 uint16_t EndCount;
 
 uint32_t RxTimeout;
+int SkipRx = 0;
 
 static uint16_t GetDigit(char *p)
 {
@@ -197,8 +198,11 @@ static void fire()
 static void RxProc()
 {
 	uint16_t t;
-	if (BufferSize <= 0)
+	if (BufferSize <= 0 || SkipRx)  {
+		SkipRx = 0;
+		Radio.Rx(RxTimeout);
 		return;
+	}
 	
 	switch (Buffer[0]) {
 	case 'a':		// from master
@@ -259,6 +263,9 @@ static void RxProc()
 			break;
 		}
 		RxTimeout = 0;
+		Radio.Rx(RxTimeout);
+		break;
+	default:
 		Radio.Rx(RxTimeout);
 		break;
 	}
@@ -432,6 +439,7 @@ void OnRxTimeout(void)
 void OnRxError(void)
 {
 	Radio.Sleep();
+	SkipRx = 1;
 	State = RX_ERROR;
 	debug_if(DEBUG_MESSAGE, "> OnRxError\r\n");
 }
