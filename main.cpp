@@ -128,7 +128,8 @@ static void SendTRPResp()
 	Buffer[0] = 'b';
 	Buffer[1] = SID;
 	sprintf(&Buffer[2], "%03d", CurCount++);
-	Radio.Send((uint8_t*)Buffer, 2 + 3);
+	sprintf(&Buffer[5], "%03d", AccRssi * -1);
+	Radio.Send((uint8_t*)Buffer, 2 + 6);
 }
 
 static void SendTISReq()
@@ -148,7 +149,8 @@ static void SendTISResp()
 	Buffer[0] = 'd';
 	Buffer[1] = SID;
 	sprintf(&Buffer[2], "%03d", CurCount);
-	Radio.Send((uint8_t*)Buffer, 2 + 3);
+	sprintf(&Buffer[5], "%03d", AccRssi / CurCount * -1);
+	Radio.Send((uint8_t*)Buffer, 2 + 6);
 }
 
 static void GenSID()
@@ -206,15 +208,13 @@ static void RxProc()
 		EndCount = GetDigit(&Buffer[2]);
 		AccRssi = RssiValue;
 		AccSnr = SnrValue;
-		debug("TRP Req: %d (RSSI:%d, SNR:%d)\r\n",
-		      EndCount, RssiValue, SnrValue);
+		debug("TRP Req: %c %d (RSSI:%d, SNR:%d)\r\n",
+		      SID, EndCount, RssiValue, SnrValue);
 		SendTRPResp();
 		break;
 	case 'b':		// from slave
 		if (Mode == TRP_REQ) {
 			CurCount++;
-			AccRssi += RssiValue;
-			AccSnr += SnrValue;
 			if (memcmp(&Buffer[2],
 				   &Buffer[2 + 3], 3) == 0) {
 				// finished
