@@ -46,8 +46,8 @@
 #error "Please define a modem in the compiler options."
 #endif
 
-#define RX_TRP_TIMEOUT			100000 // in us
-#define RX_TIS_TIMEOUT			100000 // in us
+#define RX_TRP_TIMEOUT			50000 // in us
+#define RX_TIS_TIMEOUT			50000 // in us
 #define BUFFER_SIZE			32        // Define the payload size here
 
 DigitalOut led(LED1);
@@ -143,8 +143,7 @@ static void SendTISReq()
 
 static void SendTISResp()
 {
-	debug("TIS_RESP %d %03d\r\n", SID, CurCount);
-	debug("Avg RSSI:%d, SNR:%d\r\n",
+	debug("TIS_RESP %d %03d (RSSI: %d, SNR:%d)\r\n", SID, CurCount,
 	      AccRssi / CurCount, AccSnr / CurCount);
 	Buffer[0] = 'd';
 	Buffer[1] = SID;
@@ -182,8 +181,7 @@ static void StartTIS(int count)
 
 static void ReportTRP()
 {
-	debug("TRP Result: %d/%d\r\n", CurCount, EndCount);
-	debug("Avg RSSI: %d, SNR: %d\r\n",
+	debug("TRP Result: %d/%d (RSSI: %d, SNR: %d)\r\n", CurCount, EndCount,
 	      AccRssi / CurCount, AccSnr / CurCount);
 }
 
@@ -196,6 +194,7 @@ static void fire()
 
 static void RxProc()
 {
+	uint16_t t;
 	if (BufferSize <= 0)
 		return;
 	
@@ -241,10 +240,15 @@ static void RxProc()
 		CurCount++;
 		AccRssi += RssiValue;
 		AccSnr += SnrValue;
+		t = GetDigit(&Buffer[2]);
 		EndCount = GetDigit(&Buffer[2] + 3);
-		debug("TIS Req: %d (RSSI:%d, SNR:%d)\r\n", EndCount, RssiValue, SnrValue);
-		RxTimeout = RX_TRP_TIMEOUT;
-		Radio.Rx(RxTimeout);
+		//debug("TIS Req: %d/%d (RSSI:%d, SNR:%d)\r\n", t, EndCount, RssiValue, SnrValue);
+		if (t + 1 == EndCount) {
+			SendTISResp();
+		} else {
+			RxTimeout = RX_TRP_TIMEOUT;
+			Radio.Rx(RxTimeout);
+		}
 		break;
 	case 'd':		// from slave
 		if (Mode == TIS_REQ) {
@@ -258,7 +262,6 @@ static void RxProc()
 		Radio.Rx(RxTimeout);
 		break;
 	}
-	State = IDLE;
 }
 
 static void TxProc()
@@ -296,7 +299,6 @@ static void TxProc()
 		Radio.Rx(RxTimeout);
 		break;
 	}
-	State = IDLE;
 }
 
 int main() 
@@ -366,26 +368,29 @@ int main()
 			break;
 		case TX:
 		case TX_TIMEOUT:
+			State = IDLE;
 			TxProc();
 			break;
 		case RX:
+			State = IDLE;
 			RxProc();
 			break;
 		case RX_TIMEOUT: // only TIS_RESP
+			State = IDLE;
 			if (Mode == TRP_REQ) {
 				ReportTRP();
 				Mode = NO_ACT;
 				RxTimeout = 0;
-				Radio.Rx(RxTimeout);
 			} else if (Mode == TIS_RESP) {
 				SendTISResp();
-				State = IDLE;
 				break;
 			}
+			Radio.Rx(RxTimeout);
+			break;
 		case RX_ERROR:
 		default:
-			Radio.Rx(RxTimeout);
 			State = IDLE;
+			Radio.Rx(RxTimeout);
 			break;
 		}
 	}
